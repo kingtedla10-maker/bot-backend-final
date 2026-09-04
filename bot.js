@@ -7,101 +7,67 @@ const TelegramBot = require('node-telegram-bot-api');
 // ==========================================
 // RENDER.COM DUMMY WEB SERVER
 // ==========================================
-// This is required so Render doesn't get stuck on "In progress"
 const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
 app.get('/', (req, res) => {
-    res.send('Safaricom Bonus Bot is running!');
+    res.send('Safaricom Bonus Bot is alive!');
 });
 
 app.listen(port, () => {
-    console.log(`🌐 Dummy web server listening on port ${port} for Render.`);
+    console.log(`🌐 Dummy server listening on port ${port} to keep Render awake.`);
 });
-
 
 // ==========================================
 // FIREBASE
 // ==========================================
-
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 // ==========================================
 // 1. CONFIGURATION
 // ==========================================
-
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 const BOT_USERNAME = process.env.BOT_USERNAME || 'Safaricom_BonusBot';
 const MINI_APP_URL = process.env.MINI_APP_URL;
 
-const SHARE_IMAGE_URL = 'https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg';
-const WELCOME_IMAGE_URL = 'https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg';
+const SHARE_IMAGE_URL = process.env.SHARE_IMAGE_URL || 'https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg';
+const WELCOME_IMAGE_URL = process.env.WELCOME_IMAGE_URL || 'https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg';
 const NOTIFY_IMAGE_URL = 'https://i.ibb.co/G4GqgZgT/photo-2026-09-04-21-33-51.jpg';
 
 const REFERRAL_REWARD = 50;
 
-
-// ==========================================
-// 2. VALIDATE CONFIGURATION
-// ==========================================
-
-if (!TELEGRAM_BOT_TOKEN) {
-    console.error('❌ TELEGRAM_BOT_TOKEN is missing from .env');
-    process.exit(1);
-}
-
-if (!ADMIN_TELEGRAM_ID) {
-    console.error('❌ ADMIN_TELEGRAM_ID is missing from .env');
-    process.exit(1);
-}
-
-if (!MINI_APP_URL) {
-    console.error('❌ MINI_APP_URL is missing from .env');
+if (!TELEGRAM_BOT_TOKEN || !ADMIN_TELEGRAM_ID || !MINI_APP_URL) {
+    console.error('❌ Missing environment variables in .env');
     process.exit(1);
 }
 
 // ==========================================
-// 3. FIREBASE CONNECTION
+// 2. FIREBASE CONNECTION
 // ==========================================
-
 let serviceAccount;
-
 try {
     serviceAccount = require('./serviceAccountKey.json');
-} catch (error) {
-    console.error('❌ Could not load serviceAccountKey.json');
-    console.error(error.message);
-    process.exit(1);
-}
-
-try {
-    initializeApp({
-        credential: cert(serviceAccount)
-    });
+    initializeApp({ credential: cert(serviceAccount) });
     console.log('✅ Firebase initialized successfully');
 } catch (error) {
-    console.error('❌ Firebase initialization failed');
-    console.error(error);
+    console.error('❌ Firebase initialization failed', error.message);
     process.exit(1);
 }
 
 const db = getFirestore();
 
 // ==========================================
-// 4. TELEGRAM BOT
+// 3. TELEGRAM BOT SETUP
 // ==========================================
-
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
-
 console.log('🚀 Starting Safaricom Bonus Bot...');
 
 // ==========================================
-// 5. HELPER FUNCTIONS
+// 4. HELPER FUNCTIONS
 // ==========================================
-
 function getPrivateUserId(msg) {
     return (msg.from?.id?.toString() || msg.chat?.id?.toString());
 }
@@ -120,27 +86,15 @@ function extractReferralId(payload) {
     return match ? match[1] : null;
 }
 
-// ==========================================
-// 6. TEXTS
-// ==========================================
-
 function getFormattedText() {
-    return (
-        `<b>Welcome to Safaricom Bonus!</b>\n\n` +
-        `ይጋብዙ ዛሬውኑ ጀምሮ ገንዘብ መስራት ይጀምሩ ` +
-        `አንድ ሰው ሲጋብዙ 50 ብር ይሰራሉ ` +
-        `የራስዎን መጋበዣ ሊንክ OPEN ብለው ` +
-        `በመክፈት ማግኘት ይችላሉ።`
-    );
+    return `<b>Welcome to Safaricom Bonus!🎉</b>\n\nይጋብዙ ዛሬውኑ ጀምሮ ገንዘብ መስራት ይጀምሩ አንድ ሰው ሲጋብዙ 50 ብር ይሰራሉ የራስዎን መጋበዣ ሊንክ OPEN ብለው በመክፈት ማግኘት ይችላሉ።`;
 }
 
 // ==========================================
-// 7. START COMMAND + REFERRAL SYSTEM
+// 5. START COMMAND + REFERRAL SYSTEM
 // ==========================================
-
 bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
     const userId = getPrivateUserId(msg);
-
     if (!userId || msg.chat.type !== 'private') return;
 
     const payload = match?.[1]?.trim() || null;
@@ -151,7 +105,8 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
         await db.runTransaction(async (transaction) => {
             const userSnapshot = await transaction.get(userRef);
 
-            if (userSnapshot.exists) return; // User already exists
+            // User already exists, do not reward referrer again
+            if (userSnapshot.exists) return;
 
             const newUserData = {
                 balance: 0,
@@ -162,6 +117,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
             const inviterId = extractReferralId(payload);
 
+            // No valid inviter
             if (!inviterId || inviterId === userId) {
                 transaction.set(userRef, newUserData);
                 return;
@@ -170,12 +126,13 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
             const inviterRef = db.collection('users').doc(inviterId);
             const inviterSnapshot = await transaction.get(inviterRef);
 
+            // Inviter doesn't exist in DB
             if (!inviterSnapshot.exists) {
                 transaction.set(userRef, newUserData);
                 return;
             }
 
-            // Create user with referrer
+            // Create new user linked to inviter
             transaction.set(userRef, {
                 ...newUserData,
                 referredBy: inviterId,
@@ -204,25 +161,27 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
         // ----------------------------------------------------
         const welcomeText = getFormattedText();
 
-        const options = {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: 'Open',
-                            url: uniqueLink
-                        }
-                    ]
-                ]
-            }
-        };
-
         try {
-            await bot.sendPhoto(userId, WELCOME_IMAGE_URL, { caption: welcomeText, ...options });
+            await bot.sendPhoto(userId, WELCOME_IMAGE_URL, {
+                caption: welcomeText,
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { 
+                                text: 'Open', 
+                                web_app: { url: MINI_APP_URL } 
+                            }
+                        ]
+                    ]
+                }
+            });
         } catch (photoError) {
             console.error('❌ Error sending welcome photo:', photoError.message);
-            await bot.sendMessage(userId, welcomeText, options).catch(()=>{});
+            await bot.sendMessage(userId, welcomeText, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: [[{ text: 'Open', web_app: { url: MINI_APP_URL } }]] }
+            }).catch(()=>{});
         }
 
         // ----------------------------------------------------
@@ -263,11 +222,9 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
     }
 });
 
-
 // ==========================================
-// 8. INLINE SHARE MODE
+// 6. INLINE SHARE MODE
 // ==========================================
-
 bot.on('inline_query', async (query) => {
     const queryId = query.id;
     const queryText = (query.query || '').trim();
@@ -282,11 +239,9 @@ bot.on('inline_query', async (query) => {
         return bot.answerInlineQuery(queryId, [], { cache_time: 0, is_personal: true }).catch(()=>{});
     }
 
-    const uniqueShareLink = createReferralLink(referrerId);
-    
     const shareText = getFormattedText();
-
     const resultId = `share_${referrerId}_${Date.now()}`;
+    const uniqueShareLink = createReferralLink(referrerId);
 
     const results = [
         {
@@ -313,18 +268,15 @@ bot.on('inline_query', async (query) => {
 
     try {
         await bot.answerInlineQuery(queryId, results, { cache_time: 0, is_personal: true, next_offset: '' });
-        console.log(`✅ Share result created for user ${referrerId}`);
     } catch (error) {
         console.error('❌ INLINE QUERY ERROR:', error.message);
         bot.answerInlineQuery(queryId, [], { cache_time: 0, is_personal: true }).catch(()=>{});
     }
 });
 
-
 // ==========================================
-// 9. NORMAL TEXT MESSAGE FALLBACK
+// 7. NORMAL TEXT MESSAGE FALLBACK
 // ==========================================
-
 bot.on('message', async (msg) => {
     if (msg.text && msg.text.startsWith('/')) return;
     if (!msg.text) return;
@@ -333,79 +285,44 @@ bot.on('message', async (msg) => {
     const userId = getPrivateUserId(msg);
     if (!userId) return;
 
-    const fallbackText = `Use button to open Safaricom Bonus.\n\nእባክዎ ለመክፈት ከታች OPEN የሚለውን ይጫኑ 👇`;
-
     try {
-        await bot.sendMessage(chatId, fallbackText, {
+        await bot.sendMessage(chatId, `Use button to open Safaricom Bonus.\n\nእባክዎ ለመክፈት ከታች OPEN የሚለውን ይጫኑ 👇`, {
             reply_markup: {
                 inline_keyboard: [
                     [{ text: 'Open', web_app: { url: MINI_APP_URL } }]
                 ]
             }
         });
-    } catch (error) {
-        console.error('❌ Fallback error:', error.message);
-    }
+    } catch (error) {}
 });
 
-
 // ==========================================
-// 10. BROADCAST
+// 8. BROADCAST
 // ==========================================
-
 bot.onText(/^\/broadcast\s+([\s\S]+)$/, async (msg, match) => {
     const adminId = msg.from?.id?.toString();
     const messageToSend = match?.[1]?.trim();
 
-    if (!adminId || adminId !== ADMIN_TELEGRAM_ID) {
-        return bot.sendMessage(msg.chat.id, '⚠️ You are not authorized.').catch(() => {});
-    }
-
-    if (!messageToSend) {
-        return bot.sendMessage(msg.chat.id, 'Usage:\n/broadcast Your message here').catch(() => {});
-    }
+    if (!adminId || adminId !== ADMIN_TELEGRAM_ID) return;
+    if (!messageToSend) return;
 
     try {
-        await bot.sendMessage(msg.chat.id, '⏳ Broadcasting...\n\nPlease wait.');
-        
+        await bot.sendMessage(msg.chat.id, '⏳ Broadcasting message to all users...');
         const usersSnapshot = await db.collection('users').get();
         let successCount = 0;
 
         for (const doc of usersSnapshot.docs) {
-            const uid = doc.id;
             try {
-                await bot.sendMessage(uid, `📢 <b>Safaricom Bonus Update:</b>\n\n${messageToSend}`, { parse_mode: 'HTML' });
+                await bot.sendMessage(doc.id, `📢 <b>Safaricom Bonus Update:</b>\n\n${messageToSend}`, { parse_mode: 'HTML' });
                 successCount++;
-            } catch (error) {
-                // Ignore blocks
-            }
+            } catch (error) {} // Ignore blocked
         }
-
         await bot.sendMessage(msg.chat.id, `✅ Broadcast complete!\nSuccessfully sent to ${successCount} users.`);
     } catch (error) {
-        bot.sendMessage(msg.chat.id, '❌ Broadcast failed.').catch(() => {});
+        console.error('❌ Broadcast failed:', error);
     }
 });
-
-
-// ==========================================
-// 11. ERROR HANDLING
-// ==========================================
 
 bot.on('polling_error', (error) => {
     console.error('❌ Telegram polling error:', error.message);
 });
-
-// ==========================================
-// 12. STARTUP INFORMATION
-// ==========================================
-
-console.log('');
-console.log('==========================================');
-console.log('   SAFARICOM BONUS BOT');
-console.log('==========================================');
-console.log(`🤖 Bot: @${BOT_USERNAME}`);
-console.log(`🌐 Mini App: ${MINI_APP_URL}`);
-console.log(`💰 Referral reward: ${REFERRAL_REWARD} ETB`);
-console.log('==========================================');
-console.log('');
