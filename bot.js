@@ -37,7 +37,7 @@ const SHARE_IMAGE_URL = process.env.SHARE_IMAGE_URL || 'https://i.ibb.co/8L4rTN4
 const WELCOME_IMAGE_URL = process.env.WELCOME_IMAGE_URL || 'https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg';
 const NOTIFY_IMAGE_URL = 'https://i.ibb.co/G4GqgZgT/photo-2026-09-04-21-33-51.jpg';
 
-const REFERRAL_REWARD = 50;
+const REFERRAL_REWARD = parseInt(process.env.REFERRAL_REWARD) || 50;
 
 if (!TELEGRAM_BOT_TOKEN || !ADMIN_TELEGRAM_ID || !MINI_APP_URL) {
     console.error('❌ Missing environment variables in .env');
@@ -218,7 +218,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
     } catch (error) {
         console.error('❌ START COMMAND ERROR:', error);
-        bot.sendMessage(userId, '❌ Something went wrong. Please try again later.').catch(() => {});
+        bot.sendMessage(userId, '❌ Something went wrong processing your request. Please try again.').catch(() => {});
     }
 });
 
