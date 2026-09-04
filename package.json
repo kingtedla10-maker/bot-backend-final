@@ -1,0 +1,1 @@
+{"name": "safaricom-bonus-bot","version": "1.0.0","description": "Professional Telegram Bot and Mini App for Safaricom Bonus","main": "bot.js","scripts": {"start": "node bot.js"},"dependencies": {"dotenv": "^16.4.5","firebase-admin": "^12.0.0","node-telegram-bot-api": "^0.65.0"}}
