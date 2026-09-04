@@ -1,12 +1,13 @@
 'use strict';
 
 require('dotenv').config();
+
 const TelegramBot = require('node-telegram-bot-api');
-const express = require('express');
 
 // ==========================================
-// RENDER.COM DUMMY WEB SERVER (PORT BINDING)
+// RENDER.COM DUMMY WEB SERVER
 // ==========================================
+const express = require('express');
 const app = express();
 const port = process.env.PORT || 10000;
 
@@ -25,12 +26,17 @@ const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 // ==========================================
-// 1. CONFIGURATION
+// 1. CONFIGURATION & SANITIZATION
 // ==========================================
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 const BOT_USERNAME = process.env.BOT_USERNAME || 'Safaricom_BonusBot';
-const MINI_APP_URL = process.env.MINI_APP_URL;
+
+// Professional fix: Sanitize the URL in case it has markdown brackets or spaces
+let rawMiniAppUrl = process.env.MINI_APP_URL || '';
+// Remove markdown format [url](url) and extract just the first URL
+const urlMatch = rawMiniAppUrl.match(/\[?(https?:\/\/[^\]\)]+)\]?/);
+const MINI_APP_URL = urlMatch ? urlMatch[1].trim() : rawMiniAppUrl.trim();
 
 const SHARE_IMAGE_URL = process.env.SHARE_IMAGE_URL || 'https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg';
 const WELCOME_IMAGE_URL = process.env.WELCOME_IMAGE_URL || 'https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg';
