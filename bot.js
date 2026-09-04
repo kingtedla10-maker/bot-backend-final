@@ -1,13 +1,9 @@
 'use strict';
 
 require('dotenv').config();
-
 const TelegramBot = require('node-telegram-bot-api');
-
-// ==========================================
-// RENDER.COM DUMMY WEB SERVER
-// ==========================================
 const express = require('express');
+
 const app = express();
 const port = process.env.PORT || 10000;
 
@@ -19,15 +15,9 @@ app.listen(port, () => {
     console.log(`🌐 Dummy server listening on port ${port} to keep Render awake.`);
 });
 
-// ==========================================
-// FIREBASE
-// ==========================================
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
-// ==========================================
-// 1. CONFIGURATION
-// ==========================================
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 const BOT_USERNAME = process.env.BOT_USERNAME || 'Safaricom_BonusBot';
@@ -44,11 +34,9 @@ if (!TELEGRAM_BOT_TOKEN || !ADMIN_TELEGRAM_ID || !MINI_APP_URL) {
     process.exit(1);
 }
 
-// ==========================================
-// 2. FIREBASE CONNECTION
-// ==========================================
 let serviceAccount;
 try {
+    // Correctly reference the JSON file in the same directory on Render
     serviceAccount = require('./serviceAccountKey.json');
     initializeApp({ credential: cert(serviceAccount) });
     console.log('✅ Firebase initialized successfully');
@@ -58,16 +46,9 @@ try {
 }
 
 const db = getFirestore();
-
-// ==========================================
-// 3. TELEGRAM BOT SETUP
-// ==========================================
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 console.log('🚀 Starting Safaricom Bonus Bot...');
 
-// ==========================================
-// 4. HELPER FUNCTIONS
-// ==========================================
 function getPrivateUserId(msg) {
     return (msg.from?.id?.toString() || msg.chat?.id?.toString());
 }
@@ -90,22 +71,17 @@ function getFormattedText() {
     return `<b>Welcome to Safaricom Bonus!🎉</b>\n\nይጋብዙ ዛሬውኑ ጀምሮ ገንዘብ መስራት ይጀምሩ አንድ ሰው ሲጋብዙ 50 ብር ይሰራሉ የራስዎን መጋበዣ ሊንክ OPEN ብለው በመክፈት ማግኘት ይችላሉ።`;
 }
 
-// ==========================================
-// 5. START COMMAND + REFERRAL SYSTEM
-// ==========================================
 bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
     const userId = getPrivateUserId(msg);
     if (!userId || msg.chat.type !== 'private') return;
 
     const payload = match?.[1]?.trim() || null;
     const userRef = db.collection('users').doc(userId);
-    const uniqueLink = createReferralLink(userId);
 
     try {
         await db.runTransaction(async (transaction) => {
             const userSnapshot = await transaction.get(userRef);
 
-            // User already exists, do not reward referrer again
             if (userSnapshot.exists) return;
 
             const newUserData = {
@@ -117,7 +93,6 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
             const inviterId = extractReferralId(payload);
 
-            // No valid inviter
             if (!inviterId || inviterId === userId) {
                 transaction.set(userRef, newUserData);
                 return;
@@ -126,27 +101,23 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
             const inviterRef = db.collection('users').doc(inviterId);
             const inviterSnapshot = await transaction.get(inviterRef);
 
-            // Inviter doesn't exist in DB
             if (!inviterSnapshot.exists) {
                 transaction.set(userRef, newUserData);
                 return;
             }
 
-            // Create new user linked to inviter
             transaction.set(userRef, {
                 ...newUserData,
                 referredBy: inviterId,
                 referralRewardGranted: true
             });
 
-            // Reward Inviter
             transaction.update(inviterRef, {
                 balance: FieldValue.increment(REFERRAL_REWARD),
                 invitedCount: FieldValue.increment(1),
                 lastReferralDate: FieldValue.serverTimestamp()
             });
 
-            // Save referral record
             const referralRef = db.collection('referrals').doc(`${inviterId}_${userId}`);
             transaction.set(referralRef, {
                 inviterId: inviterId,
@@ -156,9 +127,6 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
             }, { merge: true });
         });
 
-        // ----------------------------------------------------
-        // SEND WELCOME MESSAGE TO NEW USER
-        // ----------------------------------------------------
         const welcomeText = getFormattedText();
 
         try {
@@ -184,9 +152,6 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
             }).catch(()=>{});
         }
 
-        // ----------------------------------------------------
-        // NOTIFY INVITER
-        // ----------------------------------------------------
         if (payload) {
             const referralId = extractReferralId(payload);
             if (referralId && referralId !== userId) {
@@ -218,13 +183,14 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
     } catch (error) {
         console.error('❌ START COMMAND ERROR:', error);
+        
+        // This log will appear in Render so we can debug exactly what failed
+        console.error('Full Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        
         bot.sendMessage(userId, '❌ Something went wrong processing your request. Please try again.').catch(() => {});
     }
 });
 
-// ==========================================
-// 6. INLINE SHARE MODE
-// ==========================================
 bot.on('inline_query', async (query) => {
     const queryId = query.id;
     const queryText = (query.query || '').trim();
@@ -274,9 +240,6 @@ bot.on('inline_query', async (query) => {
     }
 });
 
-// ==========================================
-// 7. NORMAL TEXT MESSAGE FALLBACK
-// ==========================================
 bot.on('message', async (msg) => {
     if (msg.text && msg.text.startsWith('/')) return;
     if (!msg.text) return;
@@ -296,9 +259,6 @@ bot.on('message', async (msg) => {
     } catch (error) {}
 });
 
-// ==========================================
-// 8. BROADCAST
-// ==========================================
 bot.onText(/^\/broadcast\s+([\s\S]+)$/, async (msg, match) => {
     const adminId = msg.from?.id?.toString();
     const messageToSend = match?.[1]?.trim();
@@ -315,7 +275,7 @@ bot.onText(/^\/broadcast\s+([\s\S]+)$/, async (msg, match) => {
             try {
                 await bot.sendMessage(doc.id, `📢 <b>Safaricom Bonus Update:</b>\n\n${messageToSend}`, { parse_mode: 'HTML' });
                 successCount++;
-            } catch (error) {} // Ignore blocked
+            } catch (error) {} 
         }
         await bot.sendMessage(msg.chat.id, `✅ Broadcast complete!\nSuccessfully sent to ${successCount} users.`);
     } catch (error) {
