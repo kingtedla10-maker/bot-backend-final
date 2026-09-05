@@ -30,7 +30,7 @@ const adminStates = {};
 bot.setChatMenuButton({
     menu_button: {
         type: 'web_app',
-        text: '🌟 Open',
+        text: 'OPEN',
         web_app: { url: webAppUrl }
     }
 });
@@ -69,7 +69,7 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
     }
 
     // Modern Welcome Text Exact Formatting
-    const welcomeText = `Welcome to Safaricom Bonus!🎉\n\nይጋብዙ ዛሬውኑ ጀምሮ ገንዘብ መስራት ይጀምሩ አንድ ሰው ሲጋብዙ 50 ብር ይሰራሉ የራስዎን መጋበዣ ሊንክ OPEN ብለው በመክፈት ማግኘት ይችላሉ።`;
+    const welcomeText = `Welcome to Safaricom Bonus!🎉\n\nይጋብዙ ዛሬውኑ ጀምሮ ገንዘብ መስራት ይጀምሩ አንድ ሰው ሲጋብዙ 50 ብር ይሰራሉ የራስዎን መጋበዣ ሊንክ Open ብለው በመክፈት ማግኘት ይችላሉ።`;
 
     // Promotional Image URL
     const photoUrl = 'https://i.ibb.co/JWGTtB2H/photo-2026-09-05-21-45-53.jpg';
@@ -79,7 +79,7 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
         caption: welcomeText,
         reply_markup: {
             inline_keyboard: [
-                [{ text: '🌟 Open', web_app: { url: webAppUrl } }]
+                [{ text: 'OPEN', web_app: { url: webAppUrl } }]
             ]
         }
     };
