@@ -5,7 +5,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
 // ==========================================
-// RENDER.COM DUMMY WEB SERVER (PORT BINDING)
+// RENDER.COM DUMMY WEB SERVER
 // ==========================================
 const app = express();
 const port = process.env.PORT || 10000;
@@ -25,50 +25,40 @@ const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 // ==========================================
-// 1. CONFIGURATION & SANITIZATION
+// 1. CONFIGURATION (HARDCODED IMAGES)
 // ==========================================
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 const BOT_USERNAME = process.env.BOT_USERNAME || 'Safaricom_BonusBot';
-
-// Professional fix: Smart URL Extractor
-// Automatically strips HTML tags (like <img src="...">) or Markdown and grabs the raw link
-function extractImageUrl(rawString, defaultUrl) {
-    if (!rawString) return defaultUrl;
-    // First, try to find a direct image link ending in .jpg, .png, etc.
-    const imgMatch = rawString.match(/https?:\/\/[^\s"'<>\])]+\.(?:jpg|jpeg|png|gif)/i);
-    if (imgMatch) return imgMatch[0];
-    
-    // Fallback: Just grab the first http link it finds
-    const anyMatch = rawString.match(/https?:\/\/[^\s"'<>\])]+/);
-    return anyMatch ? anyMatch[0] : rawString.trim();
-}
-
-const MINI_APP_URL = extractImageUrl(process.env.MINI_APP_URL, 'https://safaricom-bonus-app.king-tedla-10.workers.dev');
-const WELCOME_IMAGE_URL = extractImageUrl(process.env.WELCOME_IMAGE_URL, 'https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg');
-const SHARE_IMAGE_URL = extractImageUrl(process.env.SHARE_IMAGE_URL, 'https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg');
-const NOTIFY_IMAGE_URL = 'https://i.ibb.co/G4GqgZgT/photo-2026-09-04-21-33-51.jpg';
-
 const REFERRAL_REWARD = parseInt(process.env.REFERRAL_REWARD) || 50;
 
-if (!TELEGRAM_BOT_TOKEN || !ADMIN_TELEGRAM_ID || !MINI_APP_URL) {
-    console.error('❌ Missing environment variables in .env');
+// Fallback in case the environment variable still has markdown
+let rawMiniAppUrl = process.env.MINI_APP_URL || 'https://safaricom-bonus-app.king-tedla-10.workers.dev';
+const urlMatch = rawMiniAppUrl.match(/https?:\/\/[^\s"'<>\])]+/);
+const MINI_APP_URL = urlMatch ? urlMatch[0] : rawMiniAppUrl;
+
+// 📸 HARDCODED EXACT IMAGE URLS (Bypasses Render Env Var errors perfectly)
+const WELCOME_PHOTO_URL = "https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg";
+const SHARE_PHOTO_URL = "https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg";
+const NOTIFY_PHOTO_URL = "https://i.ibb.co/G4GqgZgT/photo-2026-09-04-21-33-51.jpg";
+
+if (!TELEGRAM_BOT_TOKEN || !ADMIN_TELEGRAM_ID) {
+    console.error('❌ Missing core environment variables in .env or Render');
     process.exit(1);
 }
 
 // ==========================================
-// 2. FIREBASE CONNECTION (USING ENV VARS)
+// 2. FIREBASE CONNECTION
 // ==========================================
 try {
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    // Format the private key from the environment variable
     const privateKey = process.env.FIREBASE_PRIVATE_KEY 
         ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') 
         : undefined;
 
     if (!projectId || !clientEmail || !privateKey) {
-        throw new Error("Missing Firebase credentials in Render Environment Variables.");
+        throw new Error("Missing Firebase credentials.");
     }
 
     initializeApp({
@@ -78,7 +68,7 @@ try {
             privateKey: privateKey
         })
     });
-    console.log('✅ Firebase initialized successfully using secure environment variables');
+    console.log('✅ Firebase initialized successfully');
 } catch (error) {
     console.error('❌ Firebase initialization failed:', error.message);
     process.exit(1);
@@ -131,7 +121,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
         await db.runTransaction(async (transaction) => {
             const userSnapshot = await transaction.get(userRef);
 
-            // User already exists, do not reward referrer again
+            // User already exists
             if (userSnapshot.exists) return;
 
             const newUserData = {
@@ -143,7 +133,6 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
             const inviterId = extractReferralId(payload);
 
-            // No valid inviter
             if (!inviterId || inviterId === userId) {
                 transaction.set(userRef, newUserData);
                 return;
@@ -152,7 +141,6 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
             const inviterRef = db.collection('users').doc(inviterId);
             const inviterSnapshot = await transaction.get(inviterRef);
 
-            // Inviter doesn't exist in DB
             if (!inviterSnapshot.exists) {
                 transaction.set(userRef, newUserData);
                 return;
@@ -183,12 +171,12 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
         });
 
         // ----------------------------------------------------
-        // SEND WELCOME MESSAGE TO NEW USER
+        // SEND WELCOME MESSAGE WITH HARDCODED PHOTO
         // ----------------------------------------------------
         const welcomeText = getFormattedText();
 
         try {
-            await bot.sendPhoto(userId, WELCOME_IMAGE_URL, {
+            await bot.sendPhoto(userId, WELCOME_PHOTO_URL, {
                 caption: welcomeText,
                 parse_mode: 'HTML',
                 reply_markup: {
@@ -203,7 +191,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
                 }
             });
         } catch (photoError) {
-            console.error('❌ Error sending welcome photo:', photoError.message);
+            console.error('❌ Error sending welcome photo (falling back to text):', photoError.message);
             await bot.sendMessage(userId, welcomeText, {
                 parse_mode: 'HTML',
                 reply_markup: { inline_keyboard: [[{ text: 'Open', web_app: { url: MINI_APP_URL } }]] }
@@ -221,17 +209,12 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
                 if (referralSnapshot.exists) {
                     try {
-                        await bot.sendPhoto(referralId, NOTIFY_IMAGE_URL, {
+                        await bot.sendPhoto(referralId, NOTIFY_PHOTO_URL, {
                             caption: `🎉 እንኳን ደስ አለዎት ጓደኛዎ በእርስዎ መጋበዣ ሊንክ ተመዝግብቧል ወደ እርስዎ ዋሌት ተጨማሪ +50 ብር ገቢ ተደርጓል።`,
                             parse_mode: 'HTML',
                             reply_markup: {
                                 inline_keyboard: [
-                                    [
-                                        { 
-                                            text: 'Check', 
-                                            web_app: { url: MINI_APP_URL } 
-                                        }
-                                    ]
+                                    [{ text: 'Check', web_app: { url: MINI_APP_URL } }]
                                 ]
                             }
                         });
@@ -243,11 +226,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
         }
 
     } catch (error) {
-        console.error('❌ START COMMAND ERROR:', error);
-        
-        // Detailed error logging
-        console.error('Full Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-        
+        console.error('❌ START COMMAND ERROR:', error.message);
         bot.sendMessage(userId, '❌ Something went wrong processing your request. Please try again.').catch(() => {});
     }
 });
@@ -277,20 +256,15 @@ bot.on('inline_query', async (query) => {
         {
             type: 'photo',
             id: resultId,
-            photo_url: SHARE_IMAGE_URL,
-            thumbnail_url: SHARE_IMAGE_URL,
+            photo_url: SHARE_PHOTO_URL,
+            thumbnail_url: SHARE_PHOTO_URL,
             title: '🎁 Safaricom Bonus',
             description: 'Invite your friends and earn 50 ETB.',
             caption: shareText,
             parse_mode: 'HTML',
             reply_markup: {
                 inline_keyboard: [
-                    [
-                        {
-                            text: 'Open',
-                            url: uniqueShareLink
-                        }
-                    ]
+                    [{ text: 'Open', url: uniqueShareLink }]
                 ]
             }
         }
