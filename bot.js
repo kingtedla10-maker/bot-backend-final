@@ -37,10 +37,9 @@ let rawMiniAppUrl = process.env.MINI_APP_URL || 'https://safaricom-bonus-app.kin
 const urlMatch = rawMiniAppUrl.match(/https?:\/\/[^\s"'<>\])]+/);
 const MINI_APP_URL = urlMatch ? urlMatch[0] : rawMiniAppUrl;
 
-// 📸 HARDCODED EXACT IMAGE URLS (Bypasses Render Env Var errors perfectly)
-const WELCOME_PHOTO_URL = "https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg";
+// 📸 HARDCODED EXACT IMAGE URLS
+const WELCOME_PHOTO_URL = "https://i.ibb.co/YFSyY92f/photo-2026-09-05-11-33-21.jpg";
 const SHARE_PHOTO_URL = "https://i.ibb.co/8L4rTN4K/photo-2026-09-04-10-50-08.jpg";
-const NOTIFY_PHOTO_URL = "https://i.ibb.co/G4GqgZgT/photo-2026-09-04-21-33-51.jpg";
 
 if (!TELEGRAM_BOT_TOKEN || !ADMIN_TELEGRAM_ID) {
     console.error('❌ Missing core environment variables in .env or Render');
@@ -199,7 +198,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
         }
 
         // ----------------------------------------------------
-        // NOTIFY INVITER
+        // NOTIFY INVITER (TEXT ONLY NOW)
         // ----------------------------------------------------
         if (payload) {
             const referralId = extractReferralId(payload);
@@ -209,8 +208,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
                 if (referralSnapshot.exists) {
                     try {
-                        await bot.sendPhoto(referralId, NOTIFY_PHOTO_URL, {
-                            caption: `🎉 እንኳን ደስ አለዎት ጓደኛዎ በእርስዎ መጋበዣ ሊንክ ተመዝግብቧል ወደ እርስዎ ዋሌት ተጨማሪ +50 ብር ገቢ ተደርጓል።`,
+                        await bot.sendMessage(referralId, `🎉 እንኳን ደስ አለዎት ጓደኛዎ በእርስዎ መጋበዣ ሊንክ ተመዝግብቧል ወደ እርስዎ ዋሌት ተጨማሪ +50 ብር ገቢ ተደርጓል።`, {
                             parse_mode: 'HTML',
                             reply_markup: {
                                 inline_keyboard: [
