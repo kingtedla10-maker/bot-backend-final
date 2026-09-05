@@ -1,14 +1,17 @@
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
 
-// 🔴 Your actual bot token
+// 🔴 Your Bot Token
 const token = '5813025685:AAEMJm5L8mXHdJZBIX5reALHrjNzq8AkMxM';
 
 // Your Cloudflare Worker Mini App URL
 const webAppUrl = 'https://safaricom-bonus-app.king-tedla-10.workers.dev/';
 
+// 👑 Admin Telegram ID (Strictly allows ONLY this user to broadcast)
+const ADMIN_ID = '988618748';
+
 // --- RENDER WEB SERVICE FIX ---
-// Render requires a port to be bound. This dummy server prevents deployment crashes.
+// Render requires a port to be bound to prevent deployment timeouts/crashes.
 const server = http.createServer((req, res) => {
     res.writeHead(200);
     res.end('Safaricom Bonus Bot is Live and Running!');
@@ -18,16 +21,16 @@ server.listen(process.env.PORT || 3000);
 // Initialize the bot
 const bot = new TelegramBot(token, { polling: true });
 
-// Simple memory database for users
+// Simple memory database for users (For production, consider MongoDB/Firebase)
 const users = {};
-// State tracker for broadcasting
+// State tracker for admin broadcasting
 const adminStates = {}; 
 
-// Stylish Bot Menu Button
+// Stylish Bot Menu Button (Appears next to the chat input)
 bot.setChatMenuButton({
     menu_button: {
         type: 'web_app',
-        text: 'Open',
+        text: '🌟 Open',
         web_app: { url: webAppUrl }
     }
 });
@@ -36,7 +39,7 @@ bot.setChatMenuButton({
 bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     
-    // Extract referral ID if it exists
+    // Extract referral ID if it exists (e.g., from /start share_ref_12345)
     const referralParam = match[1]; 
     let refId = null;
     
@@ -57,6 +60,7 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
         if (refId && refId != chatId) {
             users[chatId].referrer = refId;
             
+            // If the referrer exists in our database, reward them
             if (users[refId]) {
                 users[refId].balance += 50;
                 users[refId].invitedCount += 1;
@@ -75,7 +79,7 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
         caption: welcomeText,
         reply_markup: {
             inline_keyboard: [
-                [{ text: 'Open', web_app: { url: webAppUrl } }]
+                [{ text: '🌟 Open', web_app: { url: webAppUrl } }]
             ]
         }
     };
@@ -83,52 +87,67 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
     // Send the aesthetic image with caption and button
     bot.sendPhoto(chatId, photoUrl, options).catch(err => {
         console.error("Error sending photo:", err);
+        // Fallback to standard text if the image fails to load for any reason
         bot.sendMessage(chatId, welcomeText, { reply_markup: options.reply_markup });
     });
 });
 
 // ==========================================
-// 📢 PROFESSIONAL BROADCAST SYSTEM
+// 📢 EXCLUSIVE ADMIN BROADCAST SYSTEM
 // ==========================================
 
-// 1. Activate Broadcast Mode
+// 1. Activate Broadcast Mode (Admin Only)
 bot.onText(/\/broadcast/, (msg) => {
     const chatId = msg.chat.id;
     
-    // Set this admin's state to waiting for a message
+    // Security Check: Block anyone who is not the Admin
+    if (chatId.toString() !== ADMIN_ID) {
+        return bot.sendMessage(chatId, "⚠️ <b>Access Denied:</b> You are not authorized to use this command.", { parse_mode: 'HTML' });
+    }
+
+    // Set admin's state to waiting for a message
     adminStates[chatId] = 'WAITING_FOR_MESSAGE';
     
-    const reply = `📢 *Broadcast Mode Activated!*\n\nPlease send me the exact message, photo, or post you want to send to everyone. \n\n_Note: I will copy whatever you send me exactly as it is (including any inline buttons or pictures)._`;
+    const reply = `📢 <b>Broadcast Mode Activated!</b>\n\nPlease send me the exact message, photo, or post you want to send to everyone.\n\n<i>Note: I will copy whatever you send me exactly as it is (including inline buttons, images, and formatting).</i>\n\nTo cancel, type /cancel`;
     
-    bot.sendMessage(chatId, reply, { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, reply, { parse_mode: 'HTML' });
 });
 
-// 2. Catch the message and broadcast it
+// Admin Cancel Command
+bot.onText(/\/cancel/, (msg) => {
+    const chatId = msg.chat.id;
+    if (adminStates[chatId] === 'WAITING_FOR_MESSAGE') {
+        adminStates[chatId] = 'IDLE';
+        bot.sendMessage(chatId, "🛑 <b>Broadcast Cancelled.</b>", { parse_mode: 'HTML' });
+    }
+});
+
+// 2. Catch the message and broadcast it (Admin Only)
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
 
-    // Ignore if it's just a standard command like /start or /broadcast
+    // Ignore command texts
     if (msg.text && msg.text.startsWith('/')) return;
 
-    // Check if this specific user is in broadcast mode
-    if (adminStates[chatId] === 'WAITING_FOR_MESSAGE') {
+    // Check if this user is the Admin AND in broadcast mode
+    if (chatId.toString() === ADMIN_ID && adminStates[chatId] === 'WAITING_FOR_MESSAGE') {
         
-        // Instantly turn off broadcast mode so they don't accidentally send multiple
+        // Instantly turn off broadcast mode to prevent accidental double-sends
         adminStates[chatId] = 'IDLE';
 
         const userIds = Object.keys(users);
         if (userIds.length === 0) {
-            return bot.sendMessage(chatId, "⚠️ *Error:* No users found in the database yet.", { parse_mode: 'Markdown' });
+            return bot.sendMessage(chatId, "⚠️ <b>Error:</b> No users found in the database yet.", { parse_mode: 'HTML' });
         }
 
-        bot.sendMessage(chatId, `⏳ *Broadcasting to ${userIds.length} users...* Please wait.`, { parse_mode: 'Markdown' });
+        bot.sendMessage(chatId, `⏳ <b>Broadcasting to ${userIds.length} users...</b> Please wait.`, { parse_mode: 'HTML' });
 
         let successCount = 0;
 
-        // Loop through all saved users and copy the message
+        // Loop through all saved users and copy the exact message structure
         for (const uid of userIds) {
             try {
-                // copyMessage seamlessly transfers images, text, and buttons exactly as designed
+                // copyMessage seamlessly transfers images, text formatting, and inline buttons
                 await bot.copyMessage(uid, chatId, msg.message_id);
                 successCount++;
             } catch (error) {
@@ -136,7 +155,7 @@ bot.on('message', async (msg) => {
             }
         }
 
-        bot.sendMessage(chatId, `✅ *Broadcast Complete!*\nSuccessfully delivered to ${successCount} users.`, { parse_mode: 'Markdown' });
+        bot.sendMessage(chatId, `✅ <b>Broadcast Complete!</b>\nSuccessfully delivered to ${successCount} users.`, { parse_mode: 'HTML' });
     }
 });
 
