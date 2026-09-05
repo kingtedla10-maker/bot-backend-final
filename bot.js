@@ -122,14 +122,18 @@ bot.onText(/\/cancel/, (msg) => {
     }
 });
 
-// 2. Catch the message and broadcast it (Admin Only)
+// ==========================================
+// 💬 GLOBAL MESSAGE HANDLER (Auto-Reply & Broadcast)
+// ==========================================
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
 
-    // Ignore command texts
+    // Ignore command texts (like /start, /broadcast) so they don't trigger auto-replies
     if (msg.text && msg.text.startsWith('/')) return;
 
-    // Check if this user is the Admin AND in broadcast mode
+    // ----------------------------------------------------
+    // SCENARIO 1: ADMIN IS BROADCASTING A MESSAGE
+    // ----------------------------------------------------
     if (chatId.toString() === ADMIN_ID && adminStates[chatId] === 'WAITING_FOR_MESSAGE') {
         
         // Instantly turn off broadcast mode to prevent accidental double-sends
@@ -155,8 +159,23 @@ bot.on('message', async (msg) => {
             }
         }
 
-        bot.sendMessage(chatId, `✅ <b>Broadcast Complete!</b>\nSuccessfully delivered to ${successCount} users.`, { parse_mode: 'HTML' });
+        return bot.sendMessage(chatId, `✅ <b>Broadcast Complete!</b>\nSuccessfully delivered to ${successCount} users.`, { parse_mode: 'HTML' });
     }
+
+    // ----------------------------------------------------
+    // SCENARIO 2: REGULAR USER SENDS A RANDOM MESSAGE
+    // ----------------------------------------------------
+    const autoReplyText = `Use button to open Safaricom Bonus.\n\nእባክዎ ለመክፈት ከታች OPEN የሚለውን ይጫኑ 👇`;
+    
+    const autoReplyOptions = {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: 'OPEN', web_app: { url: webAppUrl } }]
+            ]
+        }
+    };
+
+    bot.sendMessage(chatId, autoReplyText, autoReplyOptions);
 });
 
 console.log('🚀 Safaricom Bonus Bot is beautifully running...');
