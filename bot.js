@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 
-// 🔴 Replace with your actual bot token from BotFather
-const token = 'YOUR_TELEGRAM_BOT_TOKEN_HERE';
+// Your actual bot token
+const token = '5813025685:AAEMJm5L8mXHdJZBIX5reALHrjNzq8AkMxM';
 
 // Your Cloudflare Worker Mini App URL
 const webAppUrl = 'https://safaricom-bonus-app.king-tedla-10.workers.dev/';
@@ -50,9 +50,6 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
             if (users[refId]) {
                 users[refId].balance += 50;
                 users[refId].invitedCount += 1;
-                
-                // 🛑 NO NOTIFICATION SENT HERE! 
-                // The balance is updated silently to avoid annoying the inviter.
             }
         }
     }
