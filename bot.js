@@ -27,7 +27,7 @@ const adminStates = {};
 bot.setChatMenuButton({
     menu_button: {
         type: 'web_app',
-        text: '🌟 Open',
+        text: 'Open',
         web_app: { url: webAppUrl }
     }
 });
@@ -75,7 +75,7 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
         caption: welcomeText,
         reply_markup: {
             inline_keyboard: [
-                [{ text: '🌟 Open', web_app: { url: webAppUrl } }]
+                [{ text: 'Open', web_app: { url: webAppUrl } }]
             ]
         }
     };
