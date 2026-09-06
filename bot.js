@@ -84,7 +84,7 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
         }
     }
 
-    const welcomeText = `Welcome to Safaricom Bonus!🎉\n\nይጋብዙ ዛሬውኑ ጀምሮ ገንዘብ መስራት ይጀምሩ አንድ ሰው ሲጋብዙ ${referralReward} ብር ይሰራሉ የራስዎን መጋበዣ ሊንክ OPEN ብለው በመክፈት ማግኘት ይችላሉ።`;
+    const welcomeText = `Welcome to Safaricom Bonus!🎉\n\nይጋብዙ ዛሬውኑ ጀምሮ ገንዘብ መስራት ይጀምሩ አንድ ሰው ሲጋብዙ ${referralReward} ብር ይሰራሉ የራስዎን መጋበዣ ሊንክ Open ብለው በመክፈት ማግኘት ይችላሉ።`;
 
     const options = {
         caption: welcomeText,
