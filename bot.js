@@ -1,14 +1,13 @@
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
-const url = require('url');
 
-// 🔴 Your Bot Token
-const token = '5813025685:AAEMJm5L8mXHdJZBIX5reALHrjNzq8AkMxM';
+// 🔴 Your BRAND NEW Token
+const token = '5813025685:AAGcePDBDdny0I5yMnPfNq1jd3EF8uRG7tg';
 
 // Your Cloudflare Worker Mini App URL
 const webAppUrl = 'https://safaricom-bonus-app.king-tedla-10.workers.dev/';
 
-// 👑 Admin Telegram ID (Strictly allows ONLY this user to broadcast)
+// 👑 Admin Telegram ID
 const ADMIN_ID = '988618748';
 
 const users = {};
@@ -18,16 +17,17 @@ const adminStates = {};
 // 🌐 API BRIDGE & RENDER WEB SERVICE
 // ==========================================
 const server = http.createServer((req, res) => {
-    // Enable CORS so the Cloudflare Mini App can read this data securely
+    // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 
-    // This is the API endpoint the Mini App will call to get the balance
+    // This is the API endpoint the Mini App will call
     if (req.url.startsWith('/api/user')) {
-        const queryObject = url.parse(req.url, true).query;
-        const userId = queryObject.id;
+        // Modern URL parsing to remove the Deprecation Warning
+        const baseURL = `http://${req.headers.host || 'localhost'}`;
+        const parsedUrl = new URL(req.url, baseURL);
+        const userId = parsedUrl.searchParams.get('id');
         
-        // Grab the user data, or return 0 if they are new
         const userData = users[userId] || { balance: 0, invitedCount: 0 };
         
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -44,7 +44,7 @@ server.listen(process.env.PORT || 3000);
 const bot = new TelegramBot(token, { polling: true });
 
 bot.setChatMenuButton({
-    menu_button: { type: 'web_app', text: '🌟 Open', web_app: { url: webAppUrl } }
+    menu_button: { type: 'web_app', text: 'OPEN', web_app: { url: webAppUrl } }
 });
 
 // Handle /start command and Referral System
@@ -81,7 +81,7 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
 
     const options = {
         caption: welcomeText,
-        reply_markup: { inline_keyboard: [[{ text: '🌟 Open', web_app: { url: webAppUrl } }]] }
+        reply_markup: { inline_keyboard: [[{ text: 'OPEN', web_app: { url: webAppUrl } }]] }
     };
 
     bot.sendPhoto(chatId, photoUrl, options).catch(err => {
@@ -132,7 +132,7 @@ bot.on('message', async (msg) => {
 
     const autoReplyText = `Use button to open Safaricom Bonus.\n\nእባክዎ ለመክፈት ከታች OPEN የሚለውን ይጫኑ 👇`;
     bot.sendMessage(chatId, autoReplyText, {
-        reply_markup: { inline_keyboard: [[{ text: '🌟 Open', web_app: { url: webAppUrl } }]] }
+        reply_markup: { inline_keyboard: [[{ text: 'OPEN', web_app: { url: webAppUrl } }]] }
     });
 });
 
