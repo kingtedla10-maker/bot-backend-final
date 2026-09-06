@@ -1,30 +1,18 @@
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
-const mongoose = require('mongoose');
+const admin = require('firebase-admin');
 
 // 🔴 Your Active Bot Token
 const token = '5813025685:AAGcePDBDdny0I5yMnPfNq1jd3EF8uRG7tg';
 const webAppUrl = 'https://safaricom-bonus-app.king-tedla-10.workers.dev/';
 const ADMIN_ID = '988618748';
 
-// 🔴 YOUR MONGODB CONNECTION STRING
-const mongoURI = 'mongodb+srv://learningtvhappy_db_user:Xm2sMSbkNLt8XLiA@cluster0.jnii5p7.mongodb.net/safaricom_bonus?retryWrites=true&w=majority&appName=Cluster0';
-
-// Connect to MongoDB Atlas
-mongoose.connect(mongoURI).then(() => {
-    console.log('✅ Connected to MongoDB!');
-}).catch(err => {
-    console.error('❌ MongoDB Connection Error:', err);
+// 🔴 Initialize Firebase Database
+const serviceAccount = require('./serviceAccountKey.json');
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
 });
-
-// Database Schema (Replaces the temporary memory)
-const userSchema = new mongoose.Schema({
-    chatId: { type: String, unique: true },
-    balance: { type: Number, default: 0 },
-    invitedCount: { type: Number, default: 0 },
-    referrer: { type: String, default: null }
-});
-const User = mongoose.model('User', userSchema);
+const db = admin.firestore();
 
 const adminStates = {}; 
 
@@ -40,18 +28,23 @@ const server = http.createServer(async (req, res) => {
         const parsedUrl = new URL(req.url, baseURL);
         const userId = parsedUrl.searchParams.get('id');
         
-        let userData = await User.findOne({ chatId: userId });
-        if (!userData) {
-            userData = { balance: 0, invitedCount: 0 };
+        if (!userId) {
+            res.writeHead(400);
+            return res.end('Missing User ID');
         }
+
+        // Fetch real-time balance from Firebase
+        const userRef = db.collection('users').doc(userId);
+        const doc = await userRef.get();
+        const userData = doc.exists ? doc.data() : { balance: 0, invitedCount: 0 };
         
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ balance: userData.balance, invitedCount: userData.invitedCount }));
+        res.end(JSON.stringify({ balance: userData.balance || 0, invitedCount: userData.invitedCount || 0 }));
         return;
     }
 
     res.writeHead(200);
-    res.end('Safaricom Bonus Bot API is Live.');
+    res.end('Safaricom Bonus Bot (Firebase Edition) is Live.');
 });
 server.listen(process.env.PORT || 3000);
 
@@ -62,7 +55,7 @@ bot.setChatMenuButton({
 });
 
 // ==========================================
-// 🚀 PERMANENT REFERRAL TRACKING SYSTEM
+// 🚀 FIREBASE REFERRAL TRACKING SYSTEM
 // ==========================================
 bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
     const chatId = msg.chat.id.toString();
@@ -73,25 +66,31 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
         refId = referralParam.split('share_ref_')[1];
     }
 
-    let user = await User.findOne({ chatId });
+    // Connect to the specific user's document in Firebase
+    const userRef = db.collection('users').doc(chatId);
+    const doc = await userRef.get();
 
-    if (!user) {
-        user = new User({ chatId, balance: 0, invitedCount: 0, referrer: null });
+    // If user is brand new
+    if (!doc.exists) {
+        await userRef.set({ balance: 0, invitedCount: 0, referrer: refId || null });
 
+        // Add 50 ETB to the inviter
         if (refId && refId !== chatId) {
-            user.referrer = refId;
-            let referrerUser = await User.findOne({ chatId: refId });
+            const referrerRef = db.collection('users').doc(refId);
+            const refDoc = await referrerRef.get();
             
-            if (!referrerUser) {
-                 referrerUser = new User({ chatId: refId, balance: 50, invitedCount: 1 });
+            if (refDoc.exists) {
+                // Increment existing balance
+                await referrerRef.update({
+                    balance: admin.firestore.FieldValue.increment(50),
+                    invitedCount: admin.firestore.FieldValue.increment(1)
+                });
             } else {
-                 referrerUser.balance += 50;
-                 referrerUser.invitedCount += 1;
+                // Create inviter if they somehow don't exist yet
+                await referrerRef.set({ balance: 50, invitedCount: 1, referrer: null });
             }
-            await referrerUser.save(); 
             console.log(`User ${refId} earned 50 ETB!`);
         }
-        await user.save(); 
     }
 
     const welcomeText = `Welcome to Safaricom Bonus!🎉\n\nይጋብዙ ዛሬውኑ ጀምሮ ገንዘብ መስራት ይጀምሩ አንድ ሰው ሲጋብዙ 50 ብር ይሰራሉ የራስዎን መጋበዣ ሊንክ OPEN ብለው በመክፈት ማግኘት ይችላሉ።`;
@@ -132,17 +131,23 @@ bot.on('message', async (msg) => {
     if (chatId === ADMIN_ID && adminStates[chatId] === 'WAITING_FOR_MESSAGE') {
         adminStates[chatId] = 'IDLE';
         
-        const allUsers = await User.find({}, 'chatId');
-        bot.sendMessage(chatId, `⏳ <b>Broadcasting to ${allUsers.length} users...</b>`, { parse_mode: 'HTML' });
+        // Fetch all users from Firebase
+        const usersSnapshot = await db.collection('users').get();
+        bot.sendMessage(chatId, `⏳ <b>Broadcasting to ${usersSnapshot.size} users...</b>`, { parse_mode: 'HTML' });
         
         let successCount = 0;
-        for (const u of allUsers) {
+        usersSnapshot.forEach(async (userDoc) => {
             try {
-                await bot.copyMessage(u.chatId, chatId, msg.message_id);
+                await bot.copyMessage(userDoc.id, chatId, msg.message_id);
                 successCount++;
             } catch (error) { }
-        }
-        return bot.sendMessage(chatId, `✅ <b>Broadcast Complete!</b>\nDelivered to ${successCount} users.`, { parse_mode: 'HTML' });
+        });
+        
+        // Brief delay to allow messages to process
+        setTimeout(() => {
+            bot.sendMessage(chatId, `✅ <b>Broadcast Complete!</b>\nDelivered to ${successCount} users.`, { parse_mode: 'HTML' });
+        }, 2000);
+        return;
     }
 
     const autoReplyText = `Use button to open Safaricom Bonus.\n\nእባክዎ ለመክፈት ከታች OPEN የሚለውን ይጫኑ 👇`;
@@ -151,4 +156,4 @@ bot.on('message', async (msg) => {
     });
 });
 
-console.log('🚀 Safaricom Bonus Bot is Live and connecting to Database...');
+console.log('🚀 Safaricom Bonus Bot is Live and connecting to Firebase...');
