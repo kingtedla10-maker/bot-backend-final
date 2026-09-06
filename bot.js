@@ -42,7 +42,7 @@ server.listen(process.env.PORT || 3000);
 const bot = new TelegramBot(token, { polling: true });
 
 bot.setChatMenuButton({
-    menu_button: { type: 'web_app', text: '🌟 Open', web_app: { url: webAppUrl } }
+    menu_button: { type: 'web_app', text: 'OPEN', web_app: { url: webAppUrl } }
 });
 
 // ==========================================
@@ -80,7 +80,7 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
 
     const options = {
         caption: welcomeText,
-        reply_markup: { inline_keyboard: [[{ text: '🌟 Open', web_app: { url: webAppUrl } }]] }
+        reply_markup: { inline_keyboard: [[{ text: 'OPEN', web_app: { url: webAppUrl } }]] }
     };
 
     bot.sendPhoto(chatId, photoUrl, options).catch(err => {
@@ -126,7 +126,7 @@ bot.on('message', async (msg) => {
 
     const autoReplyText = `Use button to open Safaricom Bonus.\n\nእባክዎ ለመክፈት ከታች OPEN የሚለውን ይጫኑ 👇`;
     bot.sendMessage(chatId, autoReplyText, {
-        reply_markup: { inline_keyboard: [[{ text: '🌟 Open', web_app: { url: webAppUrl } }]] }
+        reply_markup: { inline_keyboard: [[{ text: 'OPEN', web_app: { url: webAppUrl } }]] }
     });
 });
 
