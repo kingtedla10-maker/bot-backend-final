@@ -1,11 +1,14 @@
+require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
 const admin = require('firebase-admin');
 
-// 🔴 Your Active Bot Token
-const token = '5813025685:AAGcePDBDdny0I5yMnPfNq1jd3EF8uRG7tg';
-const webAppUrl = 'https://safaricom-bonus-app.king-tedla-10.workers.dev/';
-const ADMIN_ID = '988618748';
+// 🔴 Dynamic Variables Pulled from your .env file
+const token = process.env.TELEGRAM_BOT_TOKEN;
+const webAppUrl = process.env.MINI_APP_URL;
+const ADMIN_ID = process.env.ADMIN_TELEGRAM_ID;
+const welcomeImageUrl = process.env.WELCOME_IMAGE_URL;
+const referralReward = Number(process.env.REFERRAL_REWARD) || 50;
 
 // 🔴 Initialize Firebase Database
 const serviceAccount = require('./serviceAccountKey.json');
@@ -16,9 +19,6 @@ const db = admin.firestore();
 
 const adminStates = {}; 
 
-// ==========================================
-// 🌐 API BRIDGE & RENDER WEB SERVICE
-// ==========================================
 const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -33,7 +33,6 @@ const server = http.createServer(async (req, res) => {
             return res.end('Missing User ID');
         }
 
-        // Fetch real-time balance from Firebase
         const userRef = db.collection('users').doc(userId);
         const doc = await userRef.get();
         const userData = doc.exists ? doc.data() : { balance: 0, invitedCount: 0 };
@@ -44,19 +43,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     res.writeHead(200);
-    res.end('Safaricom Bonus Bot (Firebase Edition) is Live.');
+    res.end('Safaricom Bonus Bot is Live.');
 });
 server.listen(process.env.PORT || 3000);
 
 const bot = new TelegramBot(token, { polling: true });
 
 bot.setChatMenuButton({
-    menu_button: { type: 'web_app', text: 'OPEN', web_app: { url: webAppUrl } }
+    menu_button: { type: 'web_app', text: 'Open', web_app: { url: webAppUrl } }
 });
 
-// ==========================================
-// 🚀 FIREBASE REFERRAL TRACKING SYSTEM
-// ==========================================
 bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
     const chatId = msg.chat.id.toString();
     const referralParam = match[1]; 
@@ -66,49 +62,40 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
         refId = referralParam.split('share_ref_')[1];
     }
 
-    // Connect to the specific user's document in Firebase
     const userRef = db.collection('users').doc(chatId);
     const doc = await userRef.get();
 
-    // If user is brand new
     if (!doc.exists) {
         await userRef.set({ balance: 0, invitedCount: 0, referrer: refId || null });
 
-        // Add 50 ETB to the inviter
         if (refId && refId !== chatId) {
             const referrerRef = db.collection('users').doc(refId);
             const refDoc = await referrerRef.get();
             
             if (refDoc.exists) {
-                // Increment existing balance
                 await referrerRef.update({
-                    balance: admin.firestore.FieldValue.increment(50),
+                    balance: admin.firestore.FieldValue.increment(referralReward),
                     invitedCount: admin.firestore.FieldValue.increment(1)
                 });
             } else {
-                // Create inviter if they somehow don't exist yet
-                await referrerRef.set({ balance: 50, invitedCount: 1, referrer: null });
+                await referrerRef.set({ balance: referralReward, invitedCount: 1, referrer: null });
             }
-            console.log(`User ${refId} earned 50 ETB!`);
+            console.log(`User ${refId} earned ${referralReward} ETB!`);
         }
     }
 
-    const welcomeText = `Welcome to Safaricom Bonus!🎉\n\nይጋብዙ ዛሬውኑ ጀምሮ ገንዘብ መስራት ይጀምሩ አንድ ሰው ሲጋብዙ 50 ብር ይሰራሉ የራስዎን መጋበዣ ሊንክ OPEN ብለው በመክፈት ማግኘት ይችላሉ።`;
-    const photoUrl = 'https://i.ibb.co/JWGTtB2H/photo-2026-09-05-21-45-53.jpg';
+    const welcomeText = `Welcome to Safaricom Bonus!🎉\n\nይጋብዙ ዛሬውኑ ጀምሮ ገንዘብ መስራት ይጀምሩ አንድ ሰው ሲጋብዙ ${referralReward} ብር ይሰራሉ የራስዎን መጋበዣ ሊንክ OPEN ብለው በመክፈት ማግኘት ይችላሉ።`;
 
     const options = {
         caption: welcomeText,
-        reply_markup: { inline_keyboard: [[{ text: 'OPEN', web_app: { url: webAppUrl } }]] }
+        reply_markup: { inline_keyboard: [[{ text: 'Open', web_app: { url: webAppUrl } }]] }
     };
 
-    bot.sendPhoto(chatId, photoUrl, options).catch(err => {
+    bot.sendPhoto(chatId, welcomeImageUrl, options).catch(err => {
         bot.sendMessage(chatId, welcomeText, { reply_markup: options.reply_markup });
     });
 });
 
-// ==========================================
-// 📢 ADMIN BROADCAST SYSTEM
-// ==========================================
 bot.onText(/\/broadcast/, (msg) => {
     const chatId = msg.chat.id.toString();
     if (chatId !== ADMIN_ID) return;
@@ -130,8 +117,6 @@ bot.on('message', async (msg) => {
 
     if (chatId === ADMIN_ID && adminStates[chatId] === 'WAITING_FOR_MESSAGE') {
         adminStates[chatId] = 'IDLE';
-        
-        // Fetch all users from Firebase
         const usersSnapshot = await db.collection('users').get();
         bot.sendMessage(chatId, `⏳ <b>Broadcasting to ${usersSnapshot.size} users...</b>`, { parse_mode: 'HTML' });
         
@@ -143,7 +128,6 @@ bot.on('message', async (msg) => {
             } catch (error) { }
         });
         
-        // Brief delay to allow messages to process
         setTimeout(() => {
             bot.sendMessage(chatId, `✅ <b>Broadcast Complete!</b>\nDelivered to ${successCount} users.`, { parse_mode: 'HTML' });
         }, 2000);
@@ -152,7 +136,7 @@ bot.on('message', async (msg) => {
 
     const autoReplyText = `Use button to open Safaricom Bonus.\n\nእባክዎ ለመክፈት ከታች OPEN የሚለውን ይጫኑ 👇`;
     bot.sendMessage(chatId, autoReplyText, {
-        reply_markup: { inline_keyboard: [[{ text: 'OPEN', web_app: { url: webAppUrl } }]] }
+        reply_markup: { inline_keyboard: [[{ text: 'Open', web_app: { url: webAppUrl } }]] }
     });
 });
 
