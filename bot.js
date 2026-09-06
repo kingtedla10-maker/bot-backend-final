@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
 
-// 🔴 Your BRAND NEW Token
+// 🔴 Your Active Bot Token
 const token = '5813025685:AAGcePDBDdny0I5yMnPfNq1jd3EF8uRG7tg';
 
 // Your Cloudflare Worker Mini App URL
@@ -10,6 +10,7 @@ const webAppUrl = 'https://safaricom-bonus-app.king-tedla-10.workers.dev/';
 // 👑 Admin Telegram ID
 const ADMIN_ID = '988618748';
 
+// Memory Database
 const users = {};
 const adminStates = {}; 
 
@@ -17,13 +18,10 @@ const adminStates = {};
 // 🌐 API BRIDGE & RENDER WEB SERVICE
 // ==========================================
 const server = http.createServer((req, res) => {
-    // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 
-    // This is the API endpoint the Mini App will call
     if (req.url.startsWith('/api/user')) {
-        // Modern URL parsing to remove the Deprecation Warning
         const baseURL = `http://${req.headers.host || 'localhost'}`;
         const parsedUrl = new URL(req.url, baseURL);
         const userId = parsedUrl.searchParams.get('id');
@@ -36,7 +34,7 @@ const server = http.createServer((req, res) => {
     }
 
     res.writeHead(200);
-    res.end('Safaricom Bonus Bot is Live and Running!');
+    res.end('Safaricom Bonus Bot API is Live.');
 });
 server.listen(process.env.PORT || 3000);
 
@@ -44,13 +42,14 @@ server.listen(process.env.PORT || 3000);
 const bot = new TelegramBot(token, { polling: true });
 
 bot.setChatMenuButton({
-    menu_button: { type: 'web_app', text: 'OPEN', web_app: { url: webAppUrl } }
+    menu_button: { type: 'web_app', text: '🌟 Open', web_app: { url: webAppUrl } }
 });
 
-// Handle /start command and Referral System
+// ==========================================
+// 🚀 REFERRAL TRACKING SYSTEM
+// ==========================================
 bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
     const chatId = msg.chat.id;
-    
     const referralParam = match[1]; 
     let refId = null;
     
@@ -58,10 +57,10 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
         refId = referralParam.split('share_ref_')[1];
     }
 
+    // Register new user and award inviter
     if (!users[chatId]) {
         users[chatId] = { balance: 0, invitedCount: 0, referrer: null };
 
-        // --- STRICT SILENT REFERRAL LOGIC ---
         if (refId && refId != chatId) {
             users[chatId].referrer = refId;
             
@@ -69,10 +68,10 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
                 users[refId] = { balance: 0, invitedCount: 0, referrer: null };
             }
             
-            // Add 50 ETB to the inviter
+            // Add exactly 50 ETB to inviter
             users[refId].balance += 50;
             users[refId].invitedCount += 1;
-            console.log(`User ${refId} earned 50 ETB!`);
+            console.log(`User ${refId} earned 50 ETB! New Balance: ${users[refId].balance}`);
         }
     }
 
@@ -81,7 +80,7 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
 
     const options = {
         caption: welcomeText,
-        reply_markup: { inline_keyboard: [[{ text: 'OPEN', web_app: { url: webAppUrl } }]] }
+        reply_markup: { inline_keyboard: [[{ text: '🌟 Open', web_app: { url: webAppUrl } }]] }
     };
 
     bot.sendPhoto(chatId, photoUrl, options).catch(err => {
@@ -94,12 +93,9 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
 // ==========================================
 bot.onText(/\/broadcast/, (msg) => {
     const chatId = msg.chat.id;
-    if (chatId.toString() !== ADMIN_ID) {
-        return bot.sendMessage(chatId, "⚠️ <b>Access Denied</b>", { parse_mode: 'HTML' });
-    }
+    if (chatId.toString() !== ADMIN_ID) return;
     adminStates[chatId] = 'WAITING_FOR_MESSAGE';
-    const reply = `📢 <b>Broadcast Mode Activated!</b>\n\nPlease send me the exact message/photo to send everyone.\nTo cancel, type /cancel`;
-    bot.sendMessage(chatId, reply, { parse_mode: 'HTML' });
+    bot.sendMessage(chatId, `📢 <b>Broadcast Mode Activated!</b>\n\nPlease send me the exact message/photo to send everyone.\nTo cancel, type /cancel`, { parse_mode: 'HTML' });
 });
 
 bot.onText(/\/cancel/, (msg) => {
@@ -117,8 +113,6 @@ bot.on('message', async (msg) => {
     if (chatId.toString() === ADMIN_ID && adminStates[chatId] === 'WAITING_FOR_MESSAGE') {
         adminStates[chatId] = 'IDLE';
         const userIds = Object.keys(users);
-        if (userIds.length === 0) return bot.sendMessage(chatId, "⚠️ <b>Error:</b> No users found.", { parse_mode: 'HTML' });
-
         bot.sendMessage(chatId, `⏳ <b>Broadcasting to ${userIds.length} users...</b>`, { parse_mode: 'HTML' });
         let successCount = 0;
         for (const uid of userIds) {
@@ -132,8 +126,8 @@ bot.on('message', async (msg) => {
 
     const autoReplyText = `Use button to open Safaricom Bonus.\n\nእባክዎ ለመክፈት ከታች OPEN የሚለውን ይጫኑ 👇`;
     bot.sendMessage(chatId, autoReplyText, {
-        reply_markup: { inline_keyboard: [[{ text: 'OPEN', web_app: { url: webAppUrl } }]] }
+        reply_markup: { inline_keyboard: [[{ text: '🌟 Open', web_app: { url: webAppUrl } }]] }
     });
 });
 
-console.log('🚀 Safaricom Bonus Bot with API Bridge is running...');
+console.log('🚀 Safaricom Bonus Bot is Live!');
